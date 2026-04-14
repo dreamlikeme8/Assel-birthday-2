@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>День Рождения Асель Молдабековой</title>
+  <style> body { margin: 0; padding: 0; background: #050a18; overflow-x: hidden; } </style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const PARTY_DATE = new Date("2026-04-28T17:00:00+06:00");
+
+function useCountdown(target) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, target - now);
+  return {
+    days: Math.floor(diff / 86400000),
+    hours: Math.floor((diff % 86400000) / 3600000),
+    minutes: Math.floor((diff % 3600000) / 60000),
+    seconds: Math.floor((diff % 60000) / 1000),
+  };
+}
+
+/* ── Starfield canvas ── */
+function Starfield() {
+  const ref = useRef(null);
+  const starsRef = useRef([]);
+  const shootingRef = useRef([]);
+  const frameRef = useRef(0);
+
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    let w = (c.width = c.offsetWidth * 2);
+    let h = (c.height = c.offsetHeight * 2);
+
+    starsRef.current = Array.from({ length: 220 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: 0.3 + Math.random() * 1.8,
+      speed: 0.02 + Math.random() * 0.08,
+      phase: Math.random() * Math.PI * 2,
+      hue: Math.random() > 0.7 ? 180 + Math.random() * 40 : 220 + Math.random() * 30,
+    }));
+
+    const addShooting = () => {
+      if (shootingRef.current.length < 2 && Math.random() < 0.008) {
+        shootingRef.current.push({
+          x: Math.random() * w * 0.8,
+          y: Math.random() * h * 0.3,
+          len: 60 + Math.random() * 100,
+          speed: 6 + Math.random() * 6,
+          angle: (Math.PI / 6) + Math.random() * (Math.PI / 8),
+          life: 1,
+        });
+      }
+    };
+
+    let raf;
+    const draw = () => {
+      frameRef.current++;
+      ctx.clearRect(0, 0, w, h);
+
+      starsRef.current.forEach((s) => {
+        const flicker = 0.4 + 0.6 * Math.sin(frameRef.current * s.speed + s.phase);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${s.hue}, 80%, 82%, ${flicker * 0.9})`;
+        ctx.fill();
+        if (s.r > 1.2) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r * 3, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${s.hue}, 90%, 70%, ${flicker * 0.08})`;
+          ctx.fill();
+        }
+      });
+
+      addShooting();
+      shootingRef.current = shootingRef.current.filter((sh) => {
+        sh.x += Math.cos(sh.angle) * sh.speed;
+        sh.y += Math.sin(sh.angle) * sh.speed;
+        sh.life -= 0.015;
+        if (sh.life <= 0) return false;
+        const grad = ctx.createLinearGradient(
+          sh.x, sh.y,
+          sh.x - Math.cos(sh.angle) * sh.len,
+          sh.y - Math.sin(sh.angle) * sh.len
+        );
+        grad.addColorStop(0, `rgba(0,245,255,${sh.life})`);
+        grad.addColorStop(1, `rgba(0,245,255,0)`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sh.x, sh.y);
+        ctx.lineTo(
+          sh.x - Math.cos(sh.angle) * sh.len,
+          sh.y - Math.sin(sh.angle) * sh.len
+        );
+        ctx.stroke();
+        return true;
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    const onResize = () => {
+      w = c.width = c.offsetWidth * 2;
+      h = c.height = c.offsetHeight * 2;
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        zIndex: 0,
+      }}
+    />
+  );
+}
+
+/* ── Orbital ring ── */
+function OrbitalRing({ size, dur, tilt, opacity, color }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        width: size,
+        height: size,
+        border: `1px solid ${color || "rgba(0,245,255,0.12)"}`,
+        borderRadius: "50%",
+        top: "50%",
+        left: "50%",
+        transform: `translate(-50%, -50%) rotateX(${tilt}deg)`,
+        animation: `orbitSpin ${dur}s linear infinite`,
+        opacity: opacity || 0.3,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+/* ── Hex grid pattern ── */
+function HexGrid() {
+  return (
+    <svg
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        opacity: 0.025,
+        pointerEvents: "none",
+        zIndex: 0,
+      }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <pattern id="hex" width="56" height="100" patternUnits="userSpaceOnUse" patternTransform="scale(1.5)">
+          <path
+            d="M28 2L54 18V50L28 66L2 50V18Z"
+            fill="none"
+            stroke="cyan"
+            strokeWidth="0.4"
+          />
+          <path
+            d="M28 34L54 50V82L28 98L2 82V50Z"
+            fill="none"
+            stroke="cyan"
+            strokeWidth="0.4"
+          />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#hex)" />
+    </svg>
+  );
+}
+
+/* ── Scan line ── */
+function ScanLine() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        width: "100%",
+        height: 2,
+        background: "linear-gradient(90deg, transparent, rgba(0,245,255,0.15), transparent)",
+        animation: "scanMove 6s linear infinite",
+        pointerEvents: "none",
+        zIndex: 1,
+      }}
+    />
+  );
+}
+
+/* ── Glowing data ticker ── */
+function DataTicker() {
+  const text = "  ◆ SIGNAL://BIRTHDAY_DETECTED  ◆ NETWORK://FRIENDS_CONNECTED  ◆ BANDWIDTH://UNLIMITED_JOY  ◆ PING://ALMATY_28.04.2026  ◆ PROTOCOL://CELEBRATION_v2.0  ◆ UPTIME://SINCE_BIRTH  ◆ STATUS://DIGITAL_TRANSFORM_COMPLETE  ";
+  return (
+    <div style={{
+      overflow: "hidden",
+      whiteSpace: "nowrap",
+      padding: "8px 0",
+      borderTop: "1px solid rgba(0,245,255,0.08)",
+      borderBottom: "1px solid rgba(0,245,255,0.08)",
+      background: "rgba(0,245,255,0.02)",
+    }}>
+      <div style={{
+        display: "inline-block",
+        animation: "tickerScroll 25s linear infinite",
+        fontFamily: "'Share Tech Mono', monospace",
+        fontSize: "0.65rem",
+        letterSpacing: "2px",
+        color: "rgba(0,245,255,0.4)",
+      }}>
+        {text}{text}
+      </div>
+    </div>
+  );
+}
+
+const WISHES = [
+  { id: "1", name: "AirPods Max", cat: "tech", prio: 3, price: 250000, link: "https://www.apple.com/airpods-max/", note: "Цвет: Midnight или Silver", reserved: false },
+  { id: "2", name: "Набор La Mer", cat: "beauty", prio: 3, price: 180000, link: "", note: "Крем и сыворотка для лица", reserved: false },
+  { id: "3", name: "Сертификат на SPA-день", cat: "experience", prio: 2, price: 50000, link: "", note: "Любой премиум SPA в Алматы", reserved: false },
+  { id: "4", name: "Kindle Paperwhite", cat: "tech", prio: 2, price: 75000, link: "", note: "Последняя модель", reserved: false },
+  { id: "5", name: "Подписка MasterClass", cat: "experience", prio: 1, price: 30000, link: "https://www.masterclass.com/", note: "Годовая подписка", reserved: false },
+  { id: "6", name: "Свеча Diptyque", cat: "home", prio: 1, price: 40000, link: "", note: "Baies или Figuier", reserved: false },
+  { id: "7", name: "Кашемировый шарф", cat: "clothes", prio: 2, price: 60000, link: "", note: "Бежевый, серый или чёрный", reserved: false },
+  { id: "8", name: "Thinking, Fast and Slow", cat: "books", prio: 1, price: 8000, link: "", note: "На английском языке", reserved: false },
+];
+
+const W_CATS = [
+  { id: "all", label: "Все", icon: "◈" },
+  { id: "tech", label: "Техника", icon: "💻" },
+  { id: "beauty", label: "Красота", icon: "✨" },
+  { id: "experience", label: "Впечатления", icon: "🎭" },
+  { id: "home", label: "Дом", icon: "🏡" },
+  { id: "books", label: "Книги", icon: "📚" },
+  { id: "clothes", label: "Одежда", icon: "👗" },
+];
+
+const PRIO = {
+  3: { label: "ОЧЕНЬ ХОЧУ", color: "#ff6b6b" },
+  2: { label: "ХОЧУ", color: "#ffb703" },
+  1: { label: "БЫЛО БЫ МИЛО", color: "#8ecae6" },
+};
+
+const ADMIN_PASS = "asel2026";
+const API_URL = "https://script.google.com/macros/s/AKfycbwzLwDVpvG9jD3ozIH16OjKOvIIlMFspMEJARbmjU8dufbv1KTKbLeCALl6yKq5EvIR/exec";
+
+function CosmicInvitation() {
+  const countdown = useCountdown(PARTY_DATE);
+  const [phase, setPhase] = useState("gate");
+  const [reveal, setReveal] = useState(false);
+  const [glitchText, setGlitchText] = useState(false);
+  const [showRsvp, setShowRsvp] = useState(false);
+  const [rsvpName, setRsvpName] = useState("");
+  const [rsvpCompany, setRsvpCompany] = useState("");
+  const [rsvpGuests, setRsvpGuests] = useState("1");
+  const [rsvpAttending, setRsvpAttending] = useState(true);
+  const [rsvpSent, setRsvpSent] = useState(false);
+  const [showWishlist, setShowWishlist] = useState(false);
+  const [wishes, setWishes] = useState([]);
+  const [wCat, setWCat] = useState("all");
+  const [reserveItem, setReserveItem] = useState(null);
+  const [reserverName, setReserverName] = useState("");
+  const [reserveOk, setReserveOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  /* Admin */
+  const [showPassInput, setShowPassInput] = useState(false);
+  const [passValue, setPassValue] = useState("");
+  const [passError, setPassError] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [addForm, setAddForm] = useState(false);
+  const [newItem, setNewItem] = useState({ name: "", cat: "other", prio: 2, price: "", link: "", note: "" });
+
+  /* Load wishes from Google Sheets */
+  const loadWishes = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(API_URL + "?action=getWishes");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setWishes(data);
+      } else if (Array.isArray(data) && data.length === 0) {
+        setWishes([]);
+      }
+    } catch (e) { console.log("Load error", e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadWishes(); }, []);
+
+  /* API helper */
+  const apiPost = async (body) => {
+    try {
+      await fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e) { console.log("API error", e); }
+  };
+
+  const tryLogin = () => {
+    if (passValue === ADMIN_PASS) {
+      setIsAdmin(true);
+      setShowPassInput(false);
+      setPassValue("");
+      setPassError(false);
+      setPhase("admin");
+      loadWishes();
+    } else {
+      setPassError(true);
+    }
+  };
+
+  const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  const addWish = async () => {
+    if (!newItem.name.trim()) return;
+    const id = genId();
+    const item = { ...newItem, id, price: newItem.price ? Number(newItem.price) : 0, reserved: false };
+    setWishes((prev) => [...prev, item]);
+    setNewItem({ name: "", cat: "other", prio: 2, price: "", link: "", note: "" });
+    setAddForm(false);
+    await apiPost({ action: "addWish", ...item });
+  };
+
+  const saveEdit = async () => {
+    if (!editItem) return;
+    const updated = { ...editItem, price: Number(editItem.price) || 0 };
+    setWishes((prev) => prev.map((w) => w.id === editItem.id ? updated : w));
+    setEditItem(null);
+    await apiPost({ action: "updateWish", ...updated });
+  };
+
+  const deleteWish = async (id) => {
+    setWishes((prev) => prev.filter((w) => w.id !== id));
+    await apiPost({ action: "deleteWish", id });
+  };
+
+  const handleRsvp = async () => {
+    if (!rsvpName.trim()) return;
+    setRsvpSent(true);
+    await apiPost({
+      action: "rsvp",
+      name: rsvpName,
+      company: rsvpCompany,
+      attending: rsvpAttending,
+      guests: rsvpGuests,
+    });
+    setTimeout(() => {
+      setShowRsvp(false);
+      setTimeout(() => setRsvpSent(false), 300);
+    }, 2500);
+  };
+
+  const handleReserve = async () => {
+    if (!reserverName.trim() || !reserveItem) return;
+    setWishes((prev) => prev.map((w) => w.id === reserveItem.id ? { ...w, reserved: true, reservedBy: reserverName } : w));
+    setReserveOk(true);
+    await apiPost({ action: "reserveWish", id: reserveItem.id, reservedBy: reserverName });
+    setTimeout(() => { setReserveItem(null); setReserverName(""); setReserveOk(false); }, 2200);
+  };
+
+  const filteredWishes = wishes.filter((w) => wCat === "all" || w.cat === wCat).sort((a, b) => b.prio - a.prio);
+
+  useEffect(() => {
+    if (phase === "main") {
+      setTimeout(() => setReveal(true), 300);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setGlitchText(true);
+      setTimeout(() => setGlitchText(false), 150);
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* ── Gate ── */
+  if (phase === "gate") {
+    return (
+      <div style={S.gateWrap}>
+        <style>{CSS}</style>
+        <Starfield />
+        <HexGrid />
+        <ScanLine />
+
+        <div style={S.gateContent}>
+          {/* Orbital rings */}
+          <div style={S.orbitalWrap}>
+            <OrbitalRing size={280} dur={20} tilt={72} opacity={0.15} />
+            <OrbitalRing size={220} dur={15} tilt={65} opacity={0.1} color="rgba(138,92,246,0.15)" />
+            <OrbitalRing size={340} dur={30} tilt={78} opacity={0.08} />
+            <div style={S.gateCoreGlow} />
+            <div style={S.gateCoreInner}>
+              <span style={S.gateCoreIcon}>⬡</span>
+            </div>
+          </div>
+
+          <div style={S.gateTag}>[ ВХОДЯЩИЙ СИГНАЛ · КАНАЛ ЗАЩИЩЁН ]</div>
+          <h1 style={S.gateTitle}>
+            <span style={S.gateTitleAccent}>ПРИГЛАШЕНИЕ</span>
+          </h1>
+          <p style={S.gateSub}>Частота доступна · Соединение установлено</p>
+
+          <button style={S.gateBtn} onClick={() => setPhase("main")}>
+            <span style={S.gateBtnDot} />
+            ПОДКЛЮЧИТЬСЯ
+            <span style={S.gateBtnDot} />
+          </button>
+
+          <div style={S.gateCoords}>
+            <span>43.2389°N</span>
+            <span style={S.gateCoordSep}>|</span>
+            <span>76.9453°E</span>
+            <span style={S.gateCoordSep}>|</span>
+            <span>ALMATY</span>
+          </div>
+
+          {/* Secret admin entry */}
+          {!showPassInput ? (
+            <div
+              style={S.adminTrigger}
+              onClick={() => setShowPassInput(true)}
+            >
+              ⬡ ВХОД ДЛЯ ИМЕНИННИЦЫ
+            </div>
+          ) : (
+            <div style={S.passBox}>
+              <input
+                style={{
+                  ...S.fieldInput,
+                  textAlign: "center",
+                  fontSize: "0.8rem",
+                  borderColor: passError ? "#ff6b6b" : "rgba(0,245,255,0.15)",
+                }}
+                type="password"
+                placeholder="Введите код доступа..."
+                value={passValue}
+                onChange={(e) => { setPassValue(e.target.value); setPassError(false); }}
+                onKeyDown={(e) => e.key === "Enter" && tryLogin()}
+                autoFocus
+              />
+              {passError && <p style={S.passError}>✕ НЕВЕРНЫЙ КОД</p>}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button style={S.modalCancel} onClick={() => { setShowPassInput(false); setPassValue(""); setPassError(false); }}>ОТМЕНА</button>
+                <button style={{ ...S.modalSubmit, flex: 1 }} onClick={tryLogin}>ВОЙТИ</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Admin Panel ── */
+  if (phase === "admin") {
+    return (
+      <div style={S.root}>
+        <style>{CSS}</style>
+        <Starfield />
+        <HexGrid />
+
+        <div style={{ position: "relative", zIndex: 2, maxWidth: 700, margin: "0 auto", padding: "20px" }}>
+          {/* Admin header */}
+          <div style={{ textAlign: "center", padding: "40px 0 20px" }}>
+            <div style={S.heroTerminal}>ADMIN_PANEL // WISHLIST_MANAGER</div>
+            <h1 style={{ ...S.heroName, fontSize: "1.8rem", marginTop: 10 }}>
+              УПРАВЛЕНИЕ <span style={S.heroNameSur}>WISHLIST</span>
+            </h1>
+            <p style={{ ...S.heroSubtext, marginTop: 8 }}>
+              Добавляй, редактируй и удаляй подарки
+            </p>
+            <div style={{ ...S.heroDivider, margin: "16px 0" }}>
+              <span style={S.heroDivLine} />
+              <span style={S.heroDivIcon}>◈</span>
+              <span style={S.heroDivLine} />
+            </div>
+            <div style={S.wlTerminal}>
+              ВСЕГО: {wishes.length} · ЗАБРОНИРОВАНО: {wishes.filter(w => w.reserved).length} · СУММА: {wishes.reduce((s, w) => s + (w.price || 0), 0).toLocaleString()} ₸
+            </div>
+          </div>
+
+          {/* Add button */}
+          <div style={{ textAlign: "center", margin: "20px 0", display: "flex", justifyContent: "center", gap: 12 }}>
+            <button style={S.rsvpBtn} onClick={() => setAddForm(true)}>
+              + ДОБАВИТЬ ПОДАРОК
+            </button>
+            <button style={{ ...S.mapBtn, color: cyan, padding: "14px 20px" }} onClick={loadWishes}>
+              ↻ ОБНОВИТЬ
+            </button>
+          </div>
+          {loading && <p style={{ ...S.wlTerminal, textAlign: "center", marginBottom: 12 }}>ЗАГРУЗКА ДАННЫХ...</p>}
+
+          {/* Wishlist items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {wishes.map((item) => {
+              const p = PRIO[item.prio];
+              const cat = W_CATS.find(c => c.id === item.cat);
+              return (
+                <div key={item.id} style={{ ...S.wlCard, opacity: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={S.wlCardGlowTop} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                      <span style={{ fontSize: "1.4rem" }}>{cat?.icon}</span>
+                      <div>
+                        <h4 style={{ ...S.wlCardName, marginBottom: 2 }}>{item.name}</h4>
+                        {item.note && <p style={{ ...S.wlCardNote, marginBottom: 0 }}>{item.note}</p>}
+                      </div>
+                    </div>
+                    <span style={{
+                      ...S.wlPrioBadge,
+                      color: p.color,
+                      borderColor: p.color + "60",
+                      background: p.color + "12",
+                    }}>{p.label}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={S.wlCardPrice}>{item.price?.toLocaleString()} ₸</span>
+                    {item.reserved && (
+                      <span style={{ ...S.wlReservedBadge, position: "static" }}>
+                        ✓ БРОНЬ: {item.reservedBy}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button
+                      style={{ ...S.wlReserveBtn, flex: 1, color: cyan }}
+                      onClick={() => setEditItem({ ...item, price: String(item.price || "") })}
+                    >
+                      ✏️ РЕДАКТИРОВАТЬ
+                    </button>
+                    <button
+                      style={{ ...S.wlReserveBtn, flex: 0.6, color: "#ff6b6b", borderColor: "rgba(255,107,107,0.2)" }}
+                      onClick={() => deleteWish(item.id)}
+                    >
+                      🗑 УДАЛИТЬ
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {wishes.length === 0 && (
+            <div style={{ textAlign: "center", padding: "50px 20px" }}>
+              <p style={{ fontSize: "2rem", marginBottom: 12 }}>🎁</p>
+              <p style={S.wishHint}>Список пуст — добавьте первый подарок!</p>
+            </div>
+          )}
+
+          {/* Exit admin */}
+          <div style={{ textAlign: "center", margin: "30px 0" }}>
+            <button
+              style={{ ...S.mapBtn, color: "rgba(200,220,255,0.4)" }}
+              onClick={() => { setPhase("gate"); setIsAdmin(false); }}
+            >
+              ← ВЫЙТИ ИЗ ПАНЕЛИ
+            </button>
+          </div>
+        </div>
+
+        {/* Add item modal */}
+        {addForm && (
+          <div style={S.overlay} onClick={() => setAddForm(false)}>
+            <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={S.msgCornerTL} /><div style={S.msgCornerTR} />
+              <div style={S.msgCornerBL} /><div style={S.msgCornerBR} />
+              <div style={S.modalHead}><span style={S.msgHeadDot} />ADD_WISH</div>
+              <h3 style={S.modalTitle}>Новый подарок</h3>
+
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>НАЗВАНИЕ *</label>
+                <input style={S.fieldInput} placeholder="Что хочешь?" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ ...S.fieldGroup, flex: 1 }}>
+                  <label style={S.fieldLabel}>ЦЕНА (₸)</label>
+                  <input style={S.fieldInput} type="number" placeholder="50000" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} />
+                </div>
+                <div style={{ ...S.fieldGroup, flex: 1 }}>
+                  <label style={S.fieldLabel}>КАТЕГОРИЯ</label>
+                  <select style={{ ...S.fieldInput, cursor: "pointer" }} value={newItem.cat} onChange={(e) => setNewItem({ ...newItem, cat: e.target.value })}>
+                    {W_CATS.filter(c => c.id !== "all").map(c => <option key={c.id} value={c.id}>{c.icon} {c.label}</option>)}
+                    <option value="other">🎁 Другое</option>
+                  </select>
+                </div>
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ПРИОРИТЕТ</label>
+                <div style={S.guestRow}>
+                  {[1, 2, 3].map((p) => (
+                    <button key={p} style={{
+                      ...S.guestBtn,
+                      background: newItem.prio === p ? PRIO[p].color : "rgba(0,245,255,0.05)",
+                      color: newItem.prio === p ? deep : cyanDim,
+                      borderColor: newItem.prio === p ? PRIO[p].color : "rgba(0,245,255,0.2)",
+                    }} onClick={() => setNewItem({ ...newItem, prio: p })}>
+                      {PRIO[p].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ССЫЛКА</label>
+                <input style={S.fieldInput} placeholder="https://..." value={newItem.link} onChange={(e) => setNewItem({ ...newItem, link: e.target.value })} />
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ЗАМЕТКА</label>
+                <input style={S.fieldInput} placeholder="Размер, цвет..." value={newItem.note} onChange={(e) => setNewItem({ ...newItem, note: e.target.value })} />
+              </div>
+              <div style={S.modalBtns}>
+                <button style={S.modalCancel} onClick={() => setAddForm(false)}>ОТМЕНА</button>
+                <button style={S.modalSubmit} onClick={addWish}><span style={S.wishBtnGlow} />ДОБАВИТЬ ✓</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit item modal */}
+        {editItem && (
+          <div style={S.overlay} onClick={() => setEditItem(null)}>
+            <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={S.msgCornerTL} /><div style={S.msgCornerTR} />
+              <div style={S.msgCornerBL} /><div style={S.msgCornerBR} />
+              <div style={S.modalHead}><span style={S.msgHeadDot} />EDIT_WISH</div>
+              <h3 style={S.modalTitle}>Редактировать</h3>
+
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>НАЗВАНИЕ</label>
+                <input style={S.fieldInput} value={editItem.name} onChange={(e) => setEditItem({ ...editItem, name: e.target.value })} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ ...S.fieldGroup, flex: 1 }}>
+                  <label style={S.fieldLabel}>ЦЕНА (₸)</label>
+                  <input style={S.fieldInput} type="number" value={editItem.price} onChange={(e) => setEditItem({ ...editItem, price: e.target.value })} />
+                </div>
+                <div style={{ ...S.fieldGroup, flex: 1 }}>
+                  <label style={S.fieldLabel}>КАТЕГОРИЯ</label>
+                  <select style={{ ...S.fieldInput, cursor: "pointer" }} value={editItem.cat} onChange={(e) => setEditItem({ ...editItem, cat: e.target.value })}>
+                    {W_CATS.filter(c => c.id !== "all").map(c => <option key={c.id} value={c.id}>{c.icon} {c.label}</option>)}
+                    <option value="other">🎁 Другое</option>
+                  </select>
+                </div>
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ПРИОРИТЕТ</label>
+                <div style={S.guestRow}>
+                  {[1, 2, 3].map((p) => (
+                    <button key={p} style={{
+                      ...S.guestBtn,
+                      background: editItem.prio === p ? PRIO[p].color : "rgba(0,245,255,0.05)",
+                      color: editItem.prio === p ? deep : cyanDim,
+                      borderColor: editItem.prio === p ? PRIO[p].color : "rgba(0,245,255,0.2)",
+                    }} onClick={() => setEditItem({ ...editItem, prio: p })}>
+                      {PRIO[p].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ССЫЛКА</label>
+                <input style={S.fieldInput} value={editItem.link || ""} onChange={(e) => setEditItem({ ...editItem, link: e.target.value })} />
+              </div>
+              <div style={S.fieldGroup}>
+                <label style={S.fieldLabel}>ЗАМЕТКА</label>
+                <input style={S.fieldInput} value={editItem.note || ""} onChange={(e) => setEditItem({ ...editItem, note: e.target.value })} />
+              </div>
+              <div style={S.modalBtns}>
+                <button style={S.modalCancel} onClick={() => setEditItem(null)}>ОТМЕНА</button>
+                <button style={S.modalSubmit} onClick={saveEdit}><span style={S.wishBtnGlow} />СОХРАНИТЬ ✓</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ── Main ── */
+  return (
+    <div style={S.root}>
+      <style>{CSS}</style>
+      <Starfield />
+      <HexGrid />
+      <ScanLine />
+
+      <DataTicker />
+
+      {/* Hero */}
+      <section style={{
+        ...S.hero,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(50px)",
+        transition: "all 1.2s cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        <div style={S.heroTerminal}>CONNECTION_ESTABLISHED // SIGNAL_STRENGTH: ████████ 100%</div>
+
+        <div style={S.heroNameWrap}>
+          <div style={S.heroNameGlow} />
+          <h1 style={{
+            ...S.heroName,
+            ...(glitchText ? { animation: "glitchFlicker 0.15s steps(2) 1" } : {}),
+          }}>
+            АСЕЛЬ
+            <br />
+            <span style={S.heroNameSur}>МОЛДАБЕКОВА</span>
+          </h1>
+        </div>
+
+        <div style={S.heroDivider}>
+          <span style={S.heroDivLine} />
+          <span style={S.heroDivIcon}>◈</span>
+          <span style={S.heroDivLine} />
+        </div>
+
+        <p style={S.heroSubtext}>открывает новый канал связи в честь</p>
+        <h2 style={S.heroBday}>ДНЯ РОЖДЕНИЯ</h2>
+        <div style={S.heroDateChip}>
+          <span style={S.heroDateDot} />
+          28.04.2026 — 17:00 · ALMATY NODE
+        </div>
+      </section>
+
+      {/* Countdown */}
+      <section style={{
+        ...S.cdSection,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(30px)",
+        transition: "all 1s cubic-bezier(0.16,1,0.3,1) 0.25s",
+      }}>
+        <div style={S.cdLabel}>◇ ДО ЗАПУСКА ОСТАЛОСЬ ◇</div>
+        <div style={S.cdGrid}>
+          {[
+            { v: countdown.days, l: "ДНЕЙ" },
+            { v: countdown.hours, l: "ЧАСОВ" },
+            { v: countdown.minutes, l: "МИНУТ" },
+            { v: countdown.seconds, l: "СЕКУНД" },
+          ].map((it, i) => (
+            <div key={i} style={S.cdItem}>
+              <span style={S.cdNum}>{String(it.v).padStart(2, "0")}</span>
+              <span style={S.cdText}>{it.l}</span>
+              <div style={S.cdItemGlow} />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Message */}
+      <section style={{
+        ...S.msgSection,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(30px)",
+        transition: "all 1s cubic-bezier(0.16,1,0.3,1) 0.45s",
+      }}>
+        <div style={S.msgCard}>
+          <div style={S.msgCornerTL} />
+          <div style={S.msgCornerTR} />
+          <div style={S.msgCornerBL} />
+          <div style={S.msgCornerBR} />
+          <div style={S.msgScanBar} />
+
+          <div style={S.msgHead}>
+            <span style={S.msgHeadDot} />
+            DECRYPTED_MESSAGE
+          </div>
+          <p style={S.msgGreeting}>Дорогой друг!</p>
+          <p style={S.msgBody}>
+            В мире, где всё подключено, есть связи, которые не измерить в
+            мегабитах — это связь между людьми. Асель — это человек, который трансформирует
+            цифровое пространство Казахстана и меняет жизни людей через любовь, и в этот
+            день она хочет быть на одной частоте с самыми важными людьми в своей жизни.
+          </p>
+          <p style={S.msgBody}>
+            Приходи — давай вместе создадим вечер, где пропускная способность для радости
+            будет безлимитной, а уровень сигнала дружбы — на максимуме.
+          </p>
+          <p style={S.msgHighlight}>
+            Твоё присутствие — лучший коннект! ✦
+          </p>
+        </div>
+      </section>
+
+      {/* Event details */}
+      <section style={{
+        ...S.detSection,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(30px)",
+        transition: "all 1s cubic-bezier(0.16,1,0.3,1) 0.6s",
+      }}>
+        <div style={S.detLabel}>◇ ТОЧКА ПОДКЛЮЧЕНИЯ ◇</div>
+        <div style={S.detGrid}>
+          {[
+            { icon: "📅", tag: "ДАТА", val: "28 АПРЕЛЯ", sub: "2026 · ВТОРНИК" },
+            { icon: "⏱", tag: "ВРЕМЯ", val: "17 : 00", sub: "НАЧАЛО ТРАНСЛЯЦИИ" },
+            { icon: "📍", tag: "БАЗОВАЯ СТАНЦИЯ", val: "PINTA PREMIUM", sub: "ул. Панфилова, 110 · Алматы" },
+          ].map((d, i) => (
+            <div key={i} style={S.detCard}>
+              <div style={S.detCardGlow} />
+              <span style={S.detIcon}>{d.icon}</span>
+              <span style={S.detTag}>{d.tag}</span>
+              <span style={S.detVal}>{d.val}</span>
+              <span style={S.detSub}>{d.sub}</span>
+              <div style={S.detCardBorder} />
+            </div>
+          ))}
+        </div>
+
+        <a
+          href="https://2gis.kz/almaty/firm/70000001074577494"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={S.mapBtn}
+        >
+          ◈ НАВИГАЦИЯ К ТОЧКЕ
+        </a>
+      </section>
+
+      {/* RSVP */}
+      <section style={{
+        ...S.rsvpSection,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(20px)",
+        transition: "all 1s cubic-bezier(0.16,1,0.3,1) 0.75s",
+      }}>
+        <div style={S.rsvpCard}>
+          <div style={S.rsvpCardGlowTop} />
+          <div style={S.msgCornerTL} />
+          <div style={S.msgCornerTR} />
+          <div style={S.msgCornerBL} />
+          <div style={S.msgCornerBR} />
+          <div style={S.rsvpTag}>◇ ПОДТВЕРЖДЕНИЕ СВЯЗИ ◇</div>
+          <p style={S.rsvpText}>
+            Подтверди своё присутствие, чтобы мы зарезервировали для тебя место в сети
+          </p>
+          <button style={S.rsvpBtn} onClick={() => setShowRsvp(true)}>
+            <span style={S.wishBtnGlow} />
+            📡&nbsp; МОЙ ОТВЕТ
+          </button>
+        </div>
+      </section>
+
+      {/* Wishlist */}
+      <section style={{
+        ...S.wishSection,
+        opacity: reveal ? 1 : 0,
+        transform: reveal ? "translateY(0)" : "translateY(20px)",
+        transition: "all 1s cubic-bezier(0.16,1,0.3,1) 0.8s",
+      }}>
+        <div style={S.wishDivider}>
+          <span style={S.heroDivLine} />
+          <span style={S.heroDivIcon}>⬡</span>
+          <span style={S.heroDivLine} />
+        </div>
+
+        <p style={S.wishHint}>
+          Хочешь отправить подарок на правильной частоте? Загляни в вишлист — там всё, что сделает именинницу счастливой
+        </p>
+
+        <button
+          onClick={() => { if (!showWishlist) loadWishes(); setShowWishlist(!showWishlist); }}
+          style={S.wishBtn}
+        >
+          <span style={S.wishBtnGlow} />
+          {showWishlist ? "▲ СКРЫТЬ WISHLIST" : "🎁  WISHLIST АСЕЛЬ"}
+        </button>
+      </section>
+
+      {/* Wishlist Items */}
+      {showWishlist && (
+        <section style={S.wlSection}>
+          <div style={S.wlHeader}>
+            <div style={S.wlTerminal}>
+              WISHLIST_DB // {wishes.length} ITEMS // {wishes.filter(w=>w.reserved).length} RESERVED
+              {loading && " // LOADING..."}
+            </div>
+          </div>
+
+          {/* Category filter */}
+          <div style={S.wlFilterRow}>
+            {W_CATS.map((c) => {
+              const count = c.id === "all" ? wishes.length : wishes.filter(w => w.cat === c.id).length;
+              if (c.id !== "all" && count === 0) return null;
+              return (
+                <button
+                  key={c.id}
+                  style={{
+                    ...S.wlFilterChip,
+                    background: wCat === c.id ? cyan : "rgba(0,245,255,0.04)",
+                    color: wCat === c.id ? deep : cyanDim,
+                    borderColor: wCat === c.id ? cyan : "rgba(0,245,255,0.12)",
+                  }}
+                  onClick={() => setWCat(c.id)}
+                >
+                  {c.icon} {c.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Items grid */}
+          <div style={S.wlGrid}>
+            {filteredWishes.map((item, i) => {
+              const p = PRIO[item.prio];
+              const cat = W_CATS.find(c => c.id === item.cat);
+              return (
+                <div key={item.id} style={{
+                  ...S.wlCard,
+                  opacity: item.reserved ? 0.5 : 1,
+                  animationDelay: `${i * 0.06}s`,
+                }}>
+                  <div style={S.wlCardGlowTop} />
+                  {item.reserved && (
+                    <div style={S.wlReservedBadge}>✓ ЗАБРОНИРОВАНО</div>
+                  )}
+                  <div style={S.wlCardTop}>
+                    <span style={{ fontSize: "1.3rem" }}>{cat?.icon}</span>
+                    <span style={{
+                      ...S.wlPrioBadge,
+                      color: p.color,
+                      borderColor: p.color + "60",
+                      background: p.color + "12",
+                    }}>{p.label}</span>
+                  </div>
+                  <h4 style={S.wlCardName}>{item.name}</h4>
+                  {item.note && <p style={S.wlCardNote}>{item.note}</p>}
+                  <div style={S.wlCardBottom}>
+                    <span style={S.wlCardPrice}>{item.price?.toLocaleString()} ₸</span>
+                    {item.link && (
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" style={S.wlCardLink}>
+                        ССЫЛКА ↗
+                      </a>
+                    )}
+                  </div>
+                  {!item.reserved ? (
+                    <button style={S.wlReserveBtn} onClick={() => setReserveItem(item)}>
+                      🔒 ЗАБРОНИРОВАТЬ
+                    </button>
+                  ) : (
+                    <div style={S.wlReservedBy}>
+                      Бронь: {item.reservedBy}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Reserve Modal */}
+      {reserveItem && (
+        <div style={S.overlay} onClick={() => { if (!reserveOk) { setReserveItem(null); setReserverName(""); } }}>
+          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={S.msgCornerTL} />
+            <div style={S.msgCornerTR} />
+            <div style={S.msgCornerBL} />
+            <div style={S.msgCornerBR} />
+            {!reserveOk ? (
+              <>
+                <div style={S.modalHead}>
+                  <span style={S.msgHeadDot} />
+                  RESERVE_GIFT
+                </div>
+                <h3 style={S.modalTitle}>Забронировать подарок</h3>
+                <div style={S.wlReserveInfo}>
+                  <span style={{ fontSize: "1.5rem" }}>{W_CATS.find(c => c.id === reserveItem.cat)?.icon}</span>
+                  <div>
+                    <div style={S.wlReserveName}>{reserveItem.name}</div>
+                    <div style={S.wlReservePrice}>{reserveItem.price?.toLocaleString()} ₸</div>
+                  </div>
+                </div>
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>ВАШЕ ИМЯ</label>
+                  <input
+                    style={S.fieldInput}
+                    placeholder="Кто бронирует..."
+                    value={reserverName}
+                    onChange={(e) => setReserverName(e.target.value)}
+                  />
+                </div>
+                <div style={S.modalBtns}>
+                  <button style={S.modalCancel} onClick={() => { setReserveItem(null); setReserverName(""); }}>ОТМЕНА</button>
+                  <button style={S.modalSubmit} onClick={handleReserve}>
+                    <span style={S.wishBtnGlow} />
+                    ЗАБРОНИРОВАТЬ ✓
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={S.rsvpSuccess}>
+                <div style={S.successIcon}>✓</div>
+                <h3 style={S.successTitle}>ПОДАРОК ЗАБРОНИРОВАН!</h3>
+                <p style={S.successText}>
+                  {reserverName}, спасибо! «{reserveItem.name}» теперь за тобой
+                </p>
+                <div style={S.successBar}><div style={S.successBarFill} /></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer style={S.footer}>
+        <DataTicker />
+        <p style={S.footerText}>
+          Сигнал отправлен с любовью · Алматы · 2026
+        </p>
+        <p style={S.footerSig}>◆ END_OF_TRANSMISSION · CONNECTION_WILL_REMAIN ◆</p>
+      </footer>
+
+      {/* RSVP Modal */}
+      {showRsvp && (
+        <div style={S.overlay} onClick={() => { if (!rsvpSent) setShowRsvp(false); }}>
+          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={S.msgCornerTL} />
+            <div style={S.msgCornerTR} />
+            <div style={S.msgCornerBL} />
+            <div style={S.msgCornerBR} />
+
+            {!rsvpSent ? (
+              <>
+                <div style={S.modalHead}>
+                  <span style={S.msgHeadDot} />
+                  RSVP_FORM
+                </div>
+                <h3 style={S.modalTitle}>Подтверди статус</h3>
+
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>СТАТУС ПОДКЛЮЧЕНИЯ</label>
+                  <div style={S.guestRow}>
+                    <button
+                      style={{
+                        ...S.attendBtn,
+                        background: rsvpAttending ? "#00ff88" : "rgba(0,245,255,0.05)",
+                        color: rsvpAttending ? deep : cyanDim,
+                        borderColor: rsvpAttending ? "#00ff88" : "rgba(0,245,255,0.2)",
+                      }}
+                      onClick={() => setRsvpAttending(true)}
+                    >
+                      ✓ БУДУ
+                    </button>
+                    <button
+                      style={{
+                        ...S.attendBtn,
+                        background: !rsvpAttending ? "#ff6b6b" : "rgba(0,245,255,0.05)",
+                        color: !rsvpAttending ? "#fff" : cyanDim,
+                        borderColor: !rsvpAttending ? "#ff6b6b" : "rgba(0,245,255,0.2)",
+                      }}
+                      onClick={() => setRsvpAttending(false)}
+                    >
+                      ✕ НЕ СМОГУ
+                    </button>
+                  </div>
+                </div>
+
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>ПОЗЫВНОЙ (ИМЯ)</label>
+                  <input
+                    style={S.fieldInput}
+                    placeholder="Введи своё имя..."
+                    value={rsvpName}
+                    onChange={(e) => setRsvpName(e.target.value)}
+                  />
+                </div>
+
+                <div style={S.fieldGroup}>
+                  <label style={S.fieldLabel}>СЕТЬ (КОМПАНИЯ)</label>
+                  <input
+                    style={S.fieldInput}
+                    placeholder="Название компании..."
+                    value={rsvpCompany}
+                    onChange={(e) => setRsvpCompany(e.target.value)}
+                  />
+                </div>
+
+                {rsvpAttending && (
+                  <div style={S.fieldGroup}>
+                    <label style={S.fieldLabel}>КОЛИЧЕСТВО ПОДКЛЮЧЕНИЙ</label>
+                    <div style={S.guestRow}>
+                      {["1", "2", "3"].map((n) => (
+                        <button
+                          key={n}
+                          style={{
+                            ...S.guestBtn,
+                            background: rsvpGuests === n ? cyan : "rgba(0,245,255,0.05)",
+                            color: rsvpGuests === n ? deep : cyanDim,
+                            borderColor: rsvpGuests === n ? cyan : "rgba(0,245,255,0.2)",
+                          }}
+                          onClick={() => setRsvpGuests(n)}
+                        >
+                          {n === "1" ? "Я один" : n === "2" ? "Я + 1" : "Я + 2"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={S.modalBtns}>
+                  <button style={S.modalCancel} onClick={() => setShowRsvp(false)}>
+                    ОТМЕНА
+                  </button>
+                  <button
+                    style={{
+                      ...S.modalSubmit,
+                      background: rsvpAttending
+                        ? `linear-gradient(135deg, #00ff88, ${cyan})`
+                        : "linear-gradient(135deg, #ff6b6b, #ff8e53)",
+                      boxShadow: rsvpAttending
+                        ? "0 0 20px rgba(0,255,136,0.15)"
+                        : "0 0 20px rgba(255,107,107,0.15)",
+                    }}
+                    onClick={handleRsvp}
+                  >
+                    <span style={S.wishBtnGlow} />
+                    ОТПРАВИТЬ ✓
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={S.rsvpSuccess}>
+                {rsvpAttending ? (
+                  <>
+                    <div style={S.successIcon}>✓</div>
+                    <h3 style={S.successTitle}>СОЕДИНЕНИЕ УСТАНОВЛЕНО!</h3>
+                    <p style={S.successText}>
+                      {rsvpName}{rsvpCompany ? ` · ${rsvpCompany}` : ""}, ты в списке! Ждём тебя 28 апреля в 17:00
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ ...S.successIcon, borderColor: "#ff6b6b", color: "#ff6b6b", boxShadow: "0 0 30px rgba(255,107,107,0.2)" }}>✕</div>
+                    <h3 style={{ ...S.successTitle, color: "#ff8e53", textShadow: "0 0 20px rgba(255,142,83,0.3)" }}>СИГНАЛ ПРИНЯТ</h3>
+                    <p style={S.successText}>
+                      {rsvpName}, очень жаль! Будем скучать. Надеемся на связь в следующий раз!
+                    </p>
+                  </>
+                )}
+                <div style={S.successBar}>
+                  <div style={{
+                    ...S.successBarFill,
+                    background: rsvpAttending
+                      ? `linear-gradient(90deg, #00ff88, ${cyan})`
+                      : "linear-gradient(90deg, #ff6b6b, #ff8e53)",
+                  }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── CSS ── */
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Share+Tech+Mono&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  a { text-decoration: none; }
+
+  @keyframes orbitSpin {
+    from { transform: translate(-50%,-50%) rotateX(72deg) rotateZ(0deg); }
+    to { transform: translate(-50%,-50%) rotateX(72deg) rotateZ(360deg); }
+  }
+  @keyframes pulseCore {
+    0%, 100% { box-shadow: 0 0 40px rgba(0,245,255,0.15), 0 0 80px rgba(0,245,255,0.05); }
+    50% { box-shadow: 0 0 60px rgba(0,245,255,0.3), 0 0 120px rgba(0,245,255,0.1); }
+  }
+  @keyframes scanMove {
+    0% { top: -2px; }
+    100% { top: 100%; }
+  }
+  @keyframes tickerScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  @keyframes glitchFlicker {
+    0% { text-shadow: -2px 0 #f0f, 2px 0 #0ff; transform: skewX(-2deg); }
+    50% { text-shadow: 2px 0 #0ff, -2px 0 #f0f; transform: skewX(1deg); }
+    100% { text-shadow: none; transform: skewX(0); }
+  }
+  @keyframes cardScanBar {
+    0% { top: 0; opacity: 0.5; }
+    50% { opacity: 0.15; }
+    100% { top: 100%; opacity: 0; }
+  }
+  @keyframes neonPulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  @keyframes floatUp {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes btnGlow {
+    0%, 100% { box-shadow: 0 0 15px rgba(0,245,255,0.2), inset 0 0 15px rgba(0,245,255,0.05); }
+    50% { box-shadow: 0 0 30px rgba(0,245,255,0.4), inset 0 0 20px rgba(0,245,255,0.1); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+`;
+
+const cyan = "#00f5ff";
+const cyanDim = "rgba(0,245,255,0.6)";
+const purple = "#8a5cf6";
+const deep = "#050a18";
+const card = "rgba(8,16,36,0.85)";
+const border = "rgba(0,245,255,0.1)";
+
+const S = {
+  /* Gate */
+  gateWrap: {
+    minHeight: "100vh",
+    background: `radial-gradient(ellipse at 50% 40%, #0a1628 0%, ${deep} 70%)`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    overflow: "hidden",
+  },
+  gateContent: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: 40,
+  },
+  orbitalWrap: {
+    position: "relative",
+    width: 280,
+    height: 280,
+    margin: "0 auto 36px",
+  },
+  gateCoreGlow: {
+    position: "absolute",
+    top: "50%", left: "50%",
+    transform: "translate(-50%,-50%)",
+    width: 100, height: 100,
+    borderRadius: "50%",
+    background: `radial-gradient(circle, rgba(0,245,255,0.12), transparent 70%)`,
+    animation: "pulseCore 4s ease-in-out infinite",
+  },
+  gateCoreInner: {
+    position: "absolute",
+    top: "50%", left: "50%",
+    transform: "translate(-50%,-50%)",
+    width: 70, height: 70,
+    borderRadius: "50%",
+    border: `1.5px solid rgba(0,245,255,0.25)`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gateCoreIcon: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "1.6rem",
+    color: cyan,
+    opacity: 0.8,
+  },
+  gateTag: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.62rem",
+    letterSpacing: 4,
+    color: cyanDim,
+    marginBottom: 14,
+  },
+  gateTitle: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "clamp(1.6rem, 5vw, 2.6rem)",
+    fontWeight: 700,
+    color: "#e8f4ff",
+    marginBottom: 10,
+  },
+  gateTitleAccent: {
+    background: `linear-gradient(90deg, ${cyan}, ${purple}, ${cyan})`,
+    backgroundSize: "200% auto",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    animation: "shimmer 4s linear infinite",
+  },
+  gateSub: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.78rem",
+    fontWeight: 300,
+    color: "rgba(200,220,255,0.4)",
+    marginBottom: 36,
+    letterSpacing: 2,
+  },
+  gateBtn: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    letterSpacing: 4,
+    color: cyan,
+    background: "rgba(0,245,255,0.04)",
+    border: `1.5px solid rgba(0,245,255,0.3)`,
+    padding: "16px 40px",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 14,
+    animation: "btnGlow 3s ease-in-out infinite",
+    transition: "all 0.3s",
+  },
+  gateBtnDot: {
+    display: "block",
+    width: 5, height: 5,
+    borderRadius: "50%",
+    background: cyan,
+    boxShadow: `0 0 8px ${cyan}`,
+  },
+  gateCoords: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    color: "rgba(0,245,255,0.25)",
+    marginTop: 40,
+    letterSpacing: 2,
+    display: "flex",
+    justifyContent: "center",
+    gap: 8,
+  },
+  gateCoordSep: { opacity: 0.3 },
+
+  /* Admin trigger */
+  adminTrigger: {
+    marginTop: 40,
+    fontSize: "0.75rem",
+    color: "rgba(0,245,255,0.2)",
+    cursor: "pointer",
+    userSelect: "none",
+    transition: "color 0.4s",
+    padding: "12px 20px",
+    border: "1px solid rgba(0,245,255,0.08)",
+    borderRadius: 2,
+    fontFamily: "'Share Tech Mono', monospace",
+    letterSpacing: 3,
+  },
+  passBox: {
+    marginTop: 30,
+    maxWidth: 260,
+    marginLeft: "auto",
+    marginRight: "auto",
+  },
+  passError: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.6rem",
+    letterSpacing: 2,
+    color: "#ff6b6b",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  /* Main */
+  root: {
+    minHeight: "100vh",
+    background: `radial-gradient(ellipse at 50% 0%, #0a1628, ${deep} 60%)`,
+    position: "relative",
+    overflow: "hidden",
+    color: "#e0ecff",
+  },
+
+  /* Hero */
+  hero: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: "60px 24px 20px",
+  },
+  heroTerminal: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.35)",
+    marginBottom: 30,
+  },
+  heroNameWrap: { position: "relative", display: "inline-block", marginBottom: 20 },
+  heroNameGlow: {
+    position: "absolute",
+    inset: "-20px -40px",
+    background: `radial-gradient(ellipse, rgba(0,245,255,0.06), transparent 70%)`,
+    pointerEvents: "none",
+  },
+  heroName: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "clamp(2rem, 7vw, 3.6rem)",
+    fontWeight: 800,
+    color: "#fff",
+    lineHeight: 1.15,
+    letterSpacing: 3,
+    textShadow: `0 0 40px rgba(0,245,255,0.15)`,
+    position: "relative",
+  },
+  heroNameSur: {
+    fontWeight: 500,
+    fontSize: "0.72em",
+    letterSpacing: 6,
+    color: cyanDim,
+  },
+  heroDivider: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    margin: "20px 0",
+  },
+  heroDivLine: {
+    display: "block",
+    width: 70,
+    height: 1,
+    background: `linear-gradient(90deg, transparent, rgba(0,245,255,0.25), transparent)`,
+  },
+  heroDivIcon: {
+    color: cyan,
+    fontSize: "0.55rem",
+    opacity: 0.5,
+    animation: "neonPulse 3s ease-in-out infinite",
+  },
+  heroSubtext: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "1rem",
+    fontWeight: 300,
+    fontStyle: "italic",
+    color: "rgba(200,220,255,0.5)",
+    marginBottom: 6,
+  },
+  heroBday: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "clamp(1.2rem, 4vw, 1.8rem)",
+    fontWeight: 700,
+    letterSpacing: 6,
+    background: `linear-gradient(90deg, ${cyan}, ${purple})`,
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    marginBottom: 16,
+  },
+  heroDateChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.68rem",
+    letterSpacing: 2,
+    color: cyanDim,
+    padding: "6px 18px",
+    border: `1px solid ${border}`,
+    background: card,
+    borderRadius: 2,
+  },
+  heroDateDot: {
+    width: 6, height: 6,
+    borderRadius: "50%",
+    background: "#00ff88",
+    boxShadow: "0 0 8px #00ff88",
+    animation: "neonPulse 2s ease-in-out infinite",
+  },
+
+  /* Countdown */
+  cdSection: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: "36px 24px",
+  },
+  cdLabel: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.6rem",
+    letterSpacing: 5,
+    color: "rgba(0,245,255,0.3)",
+    marginBottom: 18,
+  },
+  cdGrid: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  cdItem: {
+    position: "relative",
+    width: 80,
+    padding: "18px 8px 14px",
+    background: card,
+    border: `1px solid ${border}`,
+    borderRadius: 2,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  cdNum: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "1.9rem",
+    fontWeight: 700,
+    color: "#fff",
+    textShadow: `0 0 20px rgba(0,245,255,0.3)`,
+    lineHeight: 1,
+  },
+  cdText: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.5rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.4)",
+    marginTop: 8,
+  },
+  cdItemGlow: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    background: `linear-gradient(90deg, transparent, ${cyan}, transparent)`,
+    opacity: 0.4,
+  },
+
+  /* Message */
+  msgSection: {
+    position: "relative",
+    zIndex: 2,
+    padding: "20px 24px",
+    display: "flex",
+    justifyContent: "center",
+  },
+  msgCard: {
+    position: "relative",
+    maxWidth: 540,
+    width: "100%",
+    padding: "36px 32px",
+    background: card,
+    border: `1px solid ${border}`,
+    overflow: "hidden",
+  },
+  msgCornerTL: { position: "absolute", top: 0, left: 0, width: 20, height: 20, borderTop: `2px solid ${cyan}40`, borderLeft: `2px solid ${cyan}40` },
+  msgCornerTR: { position: "absolute", top: 0, right: 0, width: 20, height: 20, borderTop: `2px solid ${cyan}40`, borderRight: `2px solid ${cyan}40` },
+  msgCornerBL: { position: "absolute", bottom: 0, left: 0, width: 20, height: 20, borderBottom: `2px solid ${cyan}40`, borderLeft: `2px solid ${cyan}40` },
+  msgCornerBR: { position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderBottom: `2px solid ${cyan}40`, borderRight: `2px solid ${cyan}40` },
+  msgScanBar: {
+    position: "absolute",
+    left: 0, right: 0, height: 40,
+    background: `linear-gradient(180deg, rgba(0,245,255,0.04), transparent)`,
+    animation: "cardScanBar 4s ease-in-out infinite",
+    pointerEvents: "none",
+  },
+  msgHead: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.35)",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 18,
+  },
+  msgHeadDot: {
+    width: 5, height: 5, borderRadius: "50%",
+    background: "#00ff88",
+    boxShadow: "0 0 6px #00ff88",
+  },
+  msgGreeting: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "1.3rem",
+    fontWeight: 600,
+    color: cyan,
+    textAlign: "center",
+    marginBottom: 20,
+    letterSpacing: 1,
+    textShadow: `0 0 20px rgba(0,245,255,0.2)`,
+  },
+  msgBody: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "1rem",
+    fontWeight: 300,
+    lineHeight: 1.8,
+    color: "rgba(220,235,255,0.75)",
+    marginBottom: 18,
+    textAlign: "center",
+  },
+  msgHighlight: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "1.05rem",
+    fontWeight: 500,
+    color: cyan,
+    textAlign: "center",
+    textShadow: `0 0 20px rgba(0,245,255,0.2)`,
+  },
+
+  /* Details */
+  detSection: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: "36px 24px",
+  },
+  detLabel: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.6rem",
+    letterSpacing: 5,
+    color: "rgba(0,245,255,0.3)",
+    marginBottom: 22,
+  },
+  detGrid: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 14,
+    flexWrap: "wrap",
+    marginBottom: 24,
+  },
+  detCard: {
+    position: "relative",
+    width: 175,
+    padding: "26px 16px 22px",
+    background: card,
+    border: `1px solid ${border}`,
+    borderRadius: 2,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 3,
+    overflow: "hidden",
+    animation: "floatUp 6s ease-in-out infinite",
+  },
+  detCardGlow: {
+    position: "absolute",
+    top: 0, left: "50%",
+    transform: "translateX(-50%)",
+    width: "60%", height: 1,
+    background: `linear-gradient(90deg, transparent, ${cyan}40, transparent)`,
+  },
+  detCardBorder: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0, height: 2,
+    background: `linear-gradient(90deg, transparent, ${purple}40, transparent)`,
+  },
+  detIcon: { fontSize: "1.4rem", marginBottom: 4 },
+  detTag: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.52rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.35)",
+  },
+  detVal: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "1.05rem",
+    fontWeight: 700,
+    color: "#fff",
+    letterSpacing: 1,
+  },
+  detSub: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.72rem",
+    fontWeight: 300,
+    color: "rgba(200,220,255,0.4)",
+  },
+  mapBtn: {
+    display: "inline-block",
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.68rem",
+    letterSpacing: 3,
+    color: cyan,
+    padding: "10px 26px",
+    border: `1px solid rgba(0,245,255,0.2)`,
+    background: "rgba(0,245,255,0.03)",
+    borderRadius: 2,
+    transition: "all 0.3s",
+  },
+
+  /* Wishlist */
+  wishSection: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: "40px 24px 50px",
+  },
+  wishDivider: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    marginBottom: 24,
+  },
+  wishHint: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.95rem",
+    fontWeight: 300,
+    fontStyle: "italic",
+    color: "rgba(200,220,255,0.45)",
+    maxWidth: 400,
+    margin: "0 auto 24px",
+    lineHeight: 1.7,
+  },
+  wishBtn: {
+    position: "relative",
+    display: "inline-block",
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    letterSpacing: 3,
+    color: "#050a18",
+    background: `linear-gradient(135deg, ${cyan}, ${purple})`,
+    padding: "16px 44px",
+    border: "none",
+    borderRadius: 2,
+    cursor: "pointer",
+    overflow: "hidden",
+    animation: "btnGlow 3s ease-in-out infinite",
+    boxShadow: `0 0 30px rgba(0,245,255,0.2)`,
+    transition: "all 0.3s",
+  },
+  wishBtnGlow: {
+    position: "absolute",
+    top: 0, left: "-100%",
+    width: "200%", height: "100%",
+    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)",
+    animation: "shimmer 3s linear infinite",
+    pointerEvents: "none",
+  },
+
+  /* Footer */
+  footer: {
+    position: "relative",
+    zIndex: 2,
+    paddingBottom: 30,
+  },
+  footerText: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.78rem",
+    fontWeight: 300,
+    color: "rgba(200,220,255,0.25)",
+    textAlign: "center",
+    padding: "20px 24px 6px",
+    letterSpacing: 2,
+  },
+  footerSig: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.55rem",
+    letterSpacing: 4,
+    color: "rgba(0,245,255,0.15)",
+    textAlign: "center",
+  },
+
+  /* RSVP */
+  rsvpSection: {
+    position: "relative",
+    zIndex: 2,
+    textAlign: "center",
+    padding: "20px 24px 10px",
+  },
+  rsvpCard: {
+    position: "relative",
+    maxWidth: 480,
+    margin: "0 auto",
+    padding: "32px 28px",
+    background: card,
+    border: `1px solid ${border}`,
+    overflow: "hidden",
+  },
+  rsvpCardGlowTop: {
+    position: "absolute",
+    top: 0, left: "20%", right: "20%",
+    height: 1,
+    background: `linear-gradient(90deg, transparent, rgba(138,92,246,0.5), transparent)`,
+  },
+  rsvpTag: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.6rem",
+    letterSpacing: 5,
+    color: "rgba(0,245,255,0.3)",
+    marginBottom: 14,
+  },
+  rsvpText: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.92rem",
+    fontWeight: 300,
+    color: "rgba(220,235,255,0.55)",
+    marginBottom: 22,
+    lineHeight: 1.6,
+  },
+  rsvpBtn: {
+    position: "relative",
+    display: "inline-block",
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    letterSpacing: 3,
+    color: deep,
+    background: `linear-gradient(135deg, #00ff88, ${cyan})`,
+    padding: "14px 40px",
+    border: "none",
+    borderRadius: 2,
+    cursor: "pointer",
+    overflow: "hidden",
+    boxShadow: "0 0 25px rgba(0,255,136,0.2)",
+    transition: "all 0.3s",
+  },
+
+  /* Modal */
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(2,5,15,0.85)",
+    backdropFilter: "blur(8px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+    padding: 20,
+  },
+  modal: {
+    position: "relative",
+    background: `linear-gradient(160deg, #0c1a30, ${deep})`,
+    border: `1px solid ${border}`,
+    borderRadius: 2,
+    padding: "32px 28px",
+    maxWidth: 420,
+    width: "100%",
+    overflow: "hidden",
+  },
+  modalHead: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.55rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.35)",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "1.1rem",
+    fontWeight: 600,
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 28,
+    letterSpacing: 2,
+    textShadow: `0 0 20px rgba(0,245,255,0.15)`,
+  },
+  fieldGroup: {
+    marginBottom: 22,
+    textAlign: "left",
+  },
+  fieldLabel: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.4)",
+    display: "block",
+    marginBottom: 8,
+  },
+  fieldInput: {
+    width: "100%",
+    padding: "12px 16px",
+    background: "rgba(0,245,255,0.03)",
+    border: `1px solid rgba(0,245,255,0.15)`,
+    borderRadius: 2,
+    color: "#e0ecff",
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.95rem",
+    outline: "none",
+    transition: "border-color 0.3s",
+  },
+  guestRow: {
+    display: "flex",
+    gap: 8,
+  },
+  guestBtn: {
+    flex: 1,
+    padding: "10px 8px",
+    border: "1.5px solid rgba(0,245,255,0.2)",
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.65rem",
+    fontWeight: 600,
+    letterSpacing: 1,
+    cursor: "pointer",
+    transition: "all 0.25s",
+    background: "rgba(0,245,255,0.05)",
+    color: cyanDim,
+  },
+  attendBtn: {
+    flex: 1,
+    padding: "12px 8px",
+    border: "1.5px solid rgba(0,245,255,0.2)",
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    letterSpacing: 2,
+    cursor: "pointer",
+    transition: "all 0.25s",
+  },
+  modalBtns: {
+    display: "flex",
+    gap: 10,
+    marginTop: 26,
+  },
+  modalCancel: {
+    flex: 1,
+    padding: "12px",
+    background: "transparent",
+    border: `1px solid rgba(0,245,255,0.15)`,
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.68rem",
+    fontWeight: 500,
+    letterSpacing: 2,
+    color: "rgba(200,220,255,0.4)",
+    cursor: "pointer",
+    transition: "all 0.3s",
+  },
+  modalSubmit: {
+    flex: 1.5,
+    padding: "12px",
+    background: `linear-gradient(135deg, #00ff88, ${cyan})`,
+    border: "none",
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.68rem",
+    fontWeight: 600,
+    letterSpacing: 2,
+    color: deep,
+    cursor: "pointer",
+    position: "relative",
+    overflow: "hidden",
+    boxShadow: "0 0 20px rgba(0,255,136,0.15)",
+    transition: "all 0.3s",
+  },
+
+  /* Success */
+  rsvpSuccess: {
+    textAlign: "center",
+    padding: "20px 0",
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    lineHeight: "64px",
+    borderRadius: "50%",
+    border: `2px solid #00ff88`,
+    color: "#00ff88",
+    fontSize: "1.8rem",
+    margin: "0 auto 18px",
+    boxShadow: "0 0 30px rgba(0,255,136,0.2)",
+  },
+  successTitle: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "1rem",
+    fontWeight: 700,
+    color: "#00ff88",
+    letterSpacing: 3,
+    marginBottom: 12,
+    textShadow: "0 0 20px rgba(0,255,136,0.3)",
+  },
+  successText: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.95rem",
+    fontWeight: 400,
+    color: "rgba(220,235,255,0.7)",
+    marginBottom: 20,
+    lineHeight: 1.6,
+  },
+  successBar: {
+    width: "80%",
+    height: 3,
+    background: "rgba(0,245,255,0.1)",
+    borderRadius: 2,
+    margin: "0 auto",
+    overflow: "hidden",
+  },
+  successBarFill: {
+    width: "100%",
+    height: "100%",
+    background: `linear-gradient(90deg, #00ff88, ${cyan})`,
+    animation: "shimmer 2s linear infinite",
+    backgroundSize: "200% auto",
+  },
+
+  /* Wishlist */
+  wlSection: {
+    position: "relative",
+    zIndex: 2,
+    maxWidth: 700,
+    margin: "0 auto",
+    padding: "10px 20px 30px",
+  },
+  wlHeader: { textAlign: "center", marginBottom: 16 },
+  wlTerminal: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    letterSpacing: 3,
+    color: "rgba(0,245,255,0.3)",
+  },
+  wlFilterRow: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  wlFilterChip: {
+    padding: "6px 14px",
+    border: "1px solid rgba(0,245,255,0.12)",
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.55rem",
+    fontWeight: 600,
+    letterSpacing: 1,
+    cursor: "pointer",
+    transition: "all 0.25s",
+    whiteSpace: "nowrap",
+  },
+  wlGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+    gap: 12,
+  },
+  wlCard: {
+    position: "relative",
+    background: card,
+    border: `1px solid ${border}`,
+    borderRadius: 2,
+    padding: "20px 16px 14px",
+    overflow: "hidden",
+    transition: "all 0.3s",
+    animation: "scaleIn 0.35s ease-out both",
+  },
+  wlCardGlowTop: {
+    position: "absolute",
+    top: 0, left: "15%", right: "15%", height: 1,
+    background: `linear-gradient(90deg, transparent, rgba(0,245,255,0.2), transparent)`,
+  },
+  wlReservedBadge: {
+    position: "absolute",
+    top: 8, right: 8,
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.5rem",
+    letterSpacing: 2,
+    color: "#00ff88",
+    background: "rgba(0,255,136,0.08)",
+    border: "1px solid rgba(0,255,136,0.2)",
+    padding: "3px 8px",
+    borderRadius: 2,
+  },
+  wlCardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  wlPrioBadge: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.48rem",
+    fontWeight: 600,
+    letterSpacing: 1,
+    padding: "3px 8px",
+    borderRadius: 2,
+    border: "1px solid",
+  },
+  wlCardName: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    color: "#e0ecff",
+    marginBottom: 4,
+    lineHeight: 1.3,
+  },
+  wlCardNote: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "0.72rem",
+    fontWeight: 300,
+    color: "rgba(200,220,255,0.4)",
+    marginBottom: 10,
+    lineHeight: 1.4,
+  },
+  wlCardBottom: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  wlCardPrice: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: cyan,
+    textShadow: `0 0 12px rgba(0,245,255,0.2)`,
+  },
+  wlCardLink: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.6rem",
+    letterSpacing: 2,
+    color: purple,
+    textDecoration: "none",
+  },
+  wlReserveBtn: {
+    width: "100%",
+    padding: "8px",
+    background: "rgba(0,245,255,0.05)",
+    border: `1px solid rgba(0,245,255,0.15)`,
+    borderRadius: 2,
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.58rem",
+    fontWeight: 600,
+    letterSpacing: 2,
+    color: cyanDim,
+    cursor: "pointer",
+    transition: "all 0.25s",
+  },
+  wlReservedBy: {
+    fontFamily: "'Share Tech Mono', monospace",
+    fontSize: "0.58rem",
+    letterSpacing: 1,
+    color: "rgba(0,255,136,0.5)",
+    textAlign: "center",
+    padding: "8px 0 0",
+  },
+  wlReserveInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    padding: "16px",
+    background: "rgba(0,245,255,0.03)",
+    border: `1px solid ${border}`,
+    borderRadius: 2,
+    marginBottom: 22,
+  },
+  wlReserveName: {
+    fontFamily: "'Exo 2', sans-serif",
+    fontSize: "1rem",
+    fontWeight: 600,
+    color: "#e0ecff",
+  },
+  wlReservePrice: {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: cyanDim,
+    marginTop: 2,
+  },
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  React.createElement(CosmicInvitation)
+);
+  </script>
+</body>
+</html>
