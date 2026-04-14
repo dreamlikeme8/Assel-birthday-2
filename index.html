@@ -306,10 +306,8 @@ function CosmicInvitation() {
       setLoading(true);
       const res = await fetch(API_URL + "?action=getWishes");
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setWishes(data);
-      } else if (Array.isArray(data) && data.length === 0) {
-        setWishes([]);
       }
     } catch (e) { console.log("Load error", e); }
     setLoading(false);
@@ -317,13 +315,11 @@ function CosmicInvitation() {
 
   useEffect(() => { loadWishes(); }, []);
 
-  /* API helper */
-  const apiPost = async (body) => {
+  /* API helper — all via GET to avoid CORS issues */
+  const apiCall = async (action, data) => {
     try {
-      await fetch(API_URL, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      const url = API_URL + "?action=" + action + "&data=" + encodeURIComponent(JSON.stringify(data));
+      await fetch(url);
     } catch (e) { console.log("API error", e); }
   };
 
@@ -349,7 +345,7 @@ function CosmicInvitation() {
     setWishes((prev) => [...prev, item]);
     setNewItem({ name: "", cat: "other", prio: 2, price: "", link: "", note: "" });
     setAddForm(false);
-    await apiPost({ action: "addWish", ...item });
+    await apiCall("addWish", item);
   };
 
   const saveEdit = async () => {
@@ -357,19 +353,18 @@ function CosmicInvitation() {
     const updated = { ...editItem, price: Number(editItem.price) || 0 };
     setWishes((prev) => prev.map((w) => w.id === editItem.id ? updated : w));
     setEditItem(null);
-    await apiPost({ action: "updateWish", ...updated });
+    await apiCall("updateWish", updated);
   };
 
   const deleteWish = async (id) => {
     setWishes((prev) => prev.filter((w) => w.id !== id));
-    await apiPost({ action: "deleteWish", id });
+    await apiCall("deleteWish", { id });
   };
 
   const handleRsvp = async () => {
     if (!rsvpName.trim()) return;
     setRsvpSent(true);
-    await apiPost({
-      action: "rsvp",
+    await apiCall("rsvp", {
       name: rsvpName,
       company: rsvpCompany,
       attending: rsvpAttending,
@@ -385,7 +380,7 @@ function CosmicInvitation() {
     if (!reserverName.trim() || !reserveItem) return;
     setWishes((prev) => prev.map((w) => w.id === reserveItem.id ? { ...w, reserved: true, reservedBy: reserverName } : w));
     setReserveOk(true);
-    await apiPost({ action: "reserveWish", id: reserveItem.id, reservedBy: reserverName });
+    await apiCall("reserveWish", { id: reserveItem.id, reservedBy: reserverName });
     setTimeout(() => { setReserveItem(null); setReserverName(""); setReserveOk(false); }, 2200);
   };
 
